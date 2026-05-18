@@ -69,7 +69,7 @@
     "startBackgroundMobile": "assets/background_start_mobile.webp",
     "logo": "assets/logo.webp",
     "bombImage": "assets/bomb_ball.webp",
-    "startButton": "assets/Button/start_button.png"
+    "startButton": "assets/Button/start_button.webp"
   },
   "audio": {
     "bgm": "assets/sfx/game_bgm.wav",
