@@ -18,7 +18,33 @@ export class BootScene extends Phaser.Scene {
     bootStatus("loading assets");
     const cfg = this.cache.json.get("config") as GameConfig;
 
-    // Load path data + stages catalog, plus any optional sprite/audio assets.
+    // Register diagnostics BEFORE adding any files so we see every ADD.
+    const inflight = new Set<string>();
+    let total = 0;
+    let loaded = 0;
+    this.load.on(Phaser.Loader.Events.ADD, (_k: number, _t: string, key: string) => {
+      total++;
+      inflight.add(key);
+    });
+    this.load.on(Phaser.Loader.Events.FILE_COMPLETE, (key: string) => {
+      loaded++;
+      inflight.delete(key);
+      bootStatus(`loaded ${loaded}/${total}`);
+    });
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      inflight.delete(file.key);
+      bootStatus(`ERROR loading ${file.key}: ${file.url}`);
+    });
+
+    // After 8s if we still haven't transitioned, surface whatever is in flight.
+    this.time.delayedCall(8000, () => {
+      if (this.scene.isActive("Boot")) {
+        const stuck = Array.from(inflight).join(", ") || "(none)";
+        bootStatus(`STUCK ${loaded}/${total} — waiting on: ${stuck}`);
+      }
+    });
+
+    // Load path data + stages catalog + every configured image.
     this.load.json("path", `./${cfg.path.file}`);
     this.load.json("stages", "./stages.json");
 
@@ -47,24 +73,7 @@ export class BootScene extends Phaser.Scene {
       if (c.sprite) this.load.image(TEX.ball(c.id), c.sprite);
     }
 
-    // Audio is intentionally NOT loaded here — game_bgm.wav alone is ~9 MB and
-    // would block the loading splash for many seconds. StartScene kicks off
-    // a background audio load once the start screen is interactive, so audio
-    // streams in while the player is reading the start screen.
-
-    let pending = 0;
-    let loaded = 0;
-    this.load.on(Phaser.Loader.Events.ADD, () => {
-      pending++;
-      bootStatus(`loading ${loaded}/${pending}`);
-    });
-    this.load.on(Phaser.Loader.Events.FILE_COMPLETE, () => {
-      loaded++;
-      bootStatus(`loading ${loaded}/${pending}`);
-    });
-    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
-      bootStatus(`load error: ${file.key} (${file.url})`);
-    });
+    // Audio is intentionally NOT loaded here — streams in via StartScene.
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       bootStatus("preparing scene");
