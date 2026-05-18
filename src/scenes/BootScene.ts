@@ -19,10 +19,12 @@ export class BootScene extends Phaser.Scene {
     const cfg = this.cache.json.get("config") as GameConfig;
 
     // Register diagnostics BEFORE adding any files so we see every ADD.
+    // Phaser's ADD signature is (key, type, file) and FILE_COMPLETE is
+    // (key, type, data) — both pass the key as the FIRST arg, not the third.
     const inflight = new Set<string>();
     let total = 0;
     let loaded = 0;
-    this.load.on(Phaser.Loader.Events.ADD, (_k: number, _t: string, key: string) => {
+    this.load.on(Phaser.Loader.Events.ADD, (key: string) => {
       total++;
       inflight.add(key);
     });
@@ -40,7 +42,7 @@ export class BootScene extends Phaser.Scene {
     this.time.delayedCall(8000, () => {
       if (this.scene.isActive("Boot")) {
         const stuck = Array.from(inflight).join(", ") || "(none)";
-        bootStatus(`STUCK ${loaded}/${total} — waiting on: ${stuck}`);
+        bootStatus(`SLOW ${loaded}/${total} — still loading: ${stuck}`);
       }
     });
 
@@ -51,11 +53,16 @@ export class BootScene extends Phaser.Scene {
     if (cfg.assets.background) {
       this.load.image(TEX.background, cfg.assets.background);
     }
-    if (cfg.assets.startBackground) {
-      this.load.image(TEX.startBackground, cfg.assets.startBackground);
-    }
-    if (cfg.assets.startBackgroundMobile) {
+
+    // Pick exactly ONE start-screen background based on the user's device —
+    // loading both wastes ~1.7 MB per page view since only one is ever shown.
+    const isTouchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(hover: none) and (pointer: coarse)").matches === true;
+    if (isTouchPrimary && cfg.assets.startBackgroundMobile) {
       this.load.image(TEX.startBackgroundMobile, cfg.assets.startBackgroundMobile);
+    } else if (cfg.assets.startBackground) {
+      this.load.image(TEX.startBackground, cfg.assets.startBackground);
     }
     if (cfg.assets.logo) {
       this.load.image(TEX.logo, cfg.assets.logo);
