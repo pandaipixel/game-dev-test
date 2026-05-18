@@ -246,13 +246,32 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
-    // Audio — background music for the gameplay session
-    if (this.cache.audio.has(SFX.bgm)) {
+    // Audio — background music. The 9 MB BGM file is loaded by StartScene
+    // in the background. If the player taps Start before that load finishes,
+    // it won't be in the cache yet, so we register a one-shot listener on
+    // the audio cache to play it the moment it lands. This keeps the
+    // gameplay snappy even on slow connections (BGM just fades in late).
+    const playBgmWhenReady = () => {
+      if (this.bgm) return;
+      if (!this.cache.audio.has(SFX.bgm)) return;
       this.bgm = this.sound.add(SFX.bgm, {
         loop: true,
         volume: this.cfg.audio.bgmVolume,
       });
       this.bgm.play();
+    };
+    playBgmWhenReady();
+    if (!this.bgm && this.cfg.audio?.bgm) {
+      const onCacheAdd = (_cache: unknown, key: string) => {
+        if (key === SFX.bgm) {
+          playBgmWhenReady();
+          this.cache.audio.events.off(Phaser.Cache.Events.ADD, onCacheAdd);
+        }
+      };
+      this.cache.audio.events.on(Phaser.Cache.Events.ADD, onCacheAdd);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.cache.audio.events.off(Phaser.Cache.Events.ADD, onCacheAdd);
+      });
     }
 
     // Mute toggle (top-right corner)
