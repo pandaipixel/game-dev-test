@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { GameConfig, PathData, StagesData } from "../types";
-import { TEX } from "../types";
+import { SFX, TEX } from "../types";
 import { createStartButton } from "../ui/StartButton";
 
 interface StartData {
@@ -23,6 +23,21 @@ export class StartScene extends Phaser.Scene {
   create(data: StartData) {
     // Hide the HTML loading splash now that we have visible content to show.
     document.getElementById("loading")?.remove();
+
+    // Stream in the audio assets non-blockingly. game_bgm.wav alone is ~9 MB;
+    // loading it during BootScene would freeze the loading splash for too long
+    // so we deliberately push the audio download here, where the start screen
+    // is already interactive and the player typically spends a few seconds
+    // before tapping Start. By the time they do, audio is usually ready.
+    const a = data.cfg.audio;
+    if (a) {
+      if (a.bgm && !this.cache.audio.has(SFX.bgm)) this.load.audio(SFX.bgm, a.bgm);
+      if (a.ballMerge && !this.cache.audio.has(SFX.ballMerge)) this.load.audio(SFX.ballMerge, a.ballMerge);
+      if (a.ballRelease && !this.cache.audio.has(SFX.ballRelease)) this.load.audio(SFX.ballRelease, a.ballRelease);
+      if (a.timeBonus && !this.cache.audio.has(SFX.timeBonus)) this.load.audio(SFX.timeBonus, a.timeBonus);
+      if (a.warningTime && !this.cache.audio.has(SFX.warningTime)) this.load.audio(SFX.warningTime, a.warningTime);
+      this.load.start();
+    }
 
     const { width, height } = this.scale;
     const t = data.cfg.theme;

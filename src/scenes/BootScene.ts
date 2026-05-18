@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { GameConfig, PathData, StagesData } from "../types";
-import { SFX, TEX } from "../types";
+import { TEX } from "../types";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -44,11 +44,10 @@ export class BootScene extends Phaser.Scene {
       if (c.sprite) this.load.image(TEX.ball(c.id), c.sprite);
     }
 
-    if (cfg.audio?.bgm) this.load.audio(SFX.bgm, cfg.audio.bgm);
-    if (cfg.audio?.ballMerge) this.load.audio(SFX.ballMerge, cfg.audio.ballMerge);
-    if (cfg.audio?.ballRelease) this.load.audio(SFX.ballRelease, cfg.audio.ballRelease);
-    if (cfg.audio?.timeBonus) this.load.audio(SFX.timeBonus, cfg.audio.timeBonus);
-    if (cfg.audio?.warningTime) this.load.audio(SFX.warningTime, cfg.audio.warningTime);
+    // Audio is intentionally NOT loaded here — game_bgm.wav alone is ~9 MB and
+    // would block the loading splash for many seconds. StartScene kicks off
+    // a background audio load once the start screen is interactive, so audio
+    // streams in while the player is reading the start screen.
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.generateMissingTextures(cfg);
