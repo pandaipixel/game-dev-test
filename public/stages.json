@@ -1,0 +1,138 @@
+{
+  "$schema-note": "Each stage either supplies `points` (hand-authored waypoints) OR a `generator` (parametric path). See src/path/pathGenerators.ts for generator params. Optional `overrides` tweak chain speed / time limit / spawn etc. for that stage only.",
+  "stages": [
+    {
+      "id": "ruby-spiral",
+      "name": "Ruby Spiral",
+      "description": "Classic spiral around the heart — 2 turns inward.",
+      "generator": {
+        "type": "spiral",
+        "center": [480, 320],
+        "startRadius": 320,
+        "endRadius": 60,
+        "turns": 2,
+        "startAngleDeg": 180,
+        "clockwise": true,
+        "samples": 26,
+        "leadIn": { "from": [-40, 220], "to": [160, 200], "steps": 3 }
+      }
+    },
+    {
+      "id": "tight-coil",
+      "name": "Tight Coil",
+      "description": "Faster chain, three tight turns. Demands sharp matches.",
+      "generator": {
+        "type": "spiral",
+        "center": [480, 320],
+        "startRadius": 300,
+        "endRadius": 50,
+        "turns": 3,
+        "startAngleDeg": 200,
+        "clockwise": true,
+        "samples": 32,
+        "leadIn": { "from": [-40, 280], "to": [180, 240], "steps": 3 }
+      },
+      "overrides": {
+        "chainSpeedPxPerSec": 28,
+        "spawnIntervalMs": 500
+      }
+    },
+    {
+      "id": "diamond",
+      "name": "Ruby Diamond",
+      "description": "Four-point diamond outline — hand-authored.",
+      "points": [
+        { "x": -40, "y": 220 },
+        { "x": 200, "y": 130 },
+        { "x": 340, "y": 95  },
+        { "x": 480, "y": 80  },
+        { "x": 620, "y": 95  },
+        { "x": 760, "y": 175 },
+        { "x": 830, "y": 320 },
+        { "x": 760, "y": 465 },
+        { "x": 620, "y": 545 },
+        { "x": 480, "y": 560 },
+        { "x": 340, "y": 545 },
+        { "x": 200, "y": 465 },
+        { "x": 130, "y": 320 },
+        { "x": 280, "y": 320 },
+        { "x": 400, "y": 320 },
+        { "x": 480, "y": 320 }
+      ]
+    },
+    {
+      "id": "snake-pit",
+      "name": "Snake Pit",
+      "description": "Serpentine — chain weaves left-right across the screen.",
+      "generator": {
+        "type": "serpentine",
+        "startX": -40,
+        "endX": 920,
+        "topY": 110,
+        "bottomY": 540,
+        "rows": 4
+      },
+      "overrides": {
+        "chainSpeedPxPerSec": 18,
+        "timeLimitSec": 150
+      }
+    },
+    {
+      "id": "temple-coil",
+      "name": "Temple Coil",
+      "description": "Two converging paths — chains enter from the LEFT and RIGHT, each tracing two concentric loops. Four loops total.",
+      "lanes": [
+        {
+          "generator": {
+            "type": "doubleLoop",
+            "center": [240, 320],
+            "outerRadius": 195,
+            "innerRadius": 72,
+            "startAngleDeg": 180,
+            "clockwise": true,
+            "loopExtraDeg": 25,
+            "transitionDeg": 95,
+            "outerSamples": 16,
+            "innerSamples": 12,
+            "leadIn": { "from": [-40, 320], "to": [40, 320], "steps": 3 }
+          }
+        },
+        {
+          "generator": {
+            "type": "doubleLoop",
+            "center": [720, 320],
+            "outerRadius": 195,
+            "innerRadius": 72,
+            "startAngleDeg": 0,
+            "clockwise": false,
+            "loopExtraDeg": 25,
+            "transitionDeg": 95,
+            "outerSamples": 16,
+            "innerSamples": 12,
+            "leadIn": { "from": [1000, 320], "to": [920, 320], "steps": 3 }
+          }
+        }
+      ],
+      "overrides": {
+        "chainSpeedPxPerSec": 18,
+        "timeLimitSec": 240,
+        "spawnIntervalMs": 800
+      }
+    },
+    {
+      "id": "twin-pearls",
+      "name": "Twin Pearls",
+      "description": "Lemniscate (∞) — two lobes around the heart.",
+      "generator": {
+        "type": "figureEight",
+        "center": [480, 320],
+        "lobeRadius": 360,
+        "samples": 40,
+        "leadIn": { "from": [-40, 320], "to": [120, 320], "steps": 3 }
+      },
+      "overrides": {
+        "chainSpeedPxPerSec": 24
+      }
+    }
+  ]
+}
