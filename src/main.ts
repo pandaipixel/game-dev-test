@@ -6,7 +6,7 @@ import { GameScene } from "./scenes/GameScene";
 fetch("./config.json")
   .then((r) => r.json())
   .then((cfg) => {
-    const game = new Phaser.Game({
+    new Phaser.Game({
       type: Phaser.AUTO,
       parent: "game",
       backgroundColor: cfg.game.backgroundColor,
@@ -27,8 +27,8 @@ fetch("./config.json")
       physics: { default: "arcade", arcade: { debug: false } },
     });
 
-    // Hide the loading splash once Phaser's core systems are up.
-    game.events.once(Phaser.Core.Events.READY, () => {
-      document.getElementById("loading")?.remove();
-    });
+    // Loading splash is removed from inside StartScene.create() — i.e. only
+    // once BootScene has finished downloading every asset and the start
+    // screen is about to render. Removing it earlier (e.g. on Phaser READY)
+    // leaves the player staring at a black canvas while the loader runs.
   });

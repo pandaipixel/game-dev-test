@@ -21,6 +21,9 @@ export class StartScene extends Phaser.Scene {
   }
 
   create(data: StartData) {
+    // Hide the HTML loading splash now that we have visible content to show.
+    document.getElementById("loading")?.remove();
+
     const { width, height } = this.scale;
     const t = data.cfg.theme;
     const stage =
