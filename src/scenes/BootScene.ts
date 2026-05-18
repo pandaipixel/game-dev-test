@@ -2,17 +2,20 @@ import Phaser from "phaser";
 import type { GameConfig, PathData, StagesData } from "../types";
 import { TEX } from "../types";
 
+const bootStatus = (m: string) => window.__bootStatus?.(m);
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
   }
 
   preload() {
+    bootStatus("loading config");
     this.load.json("config", "./config.json");
-    // path.json is referenced from config; load it once config is parsed in create()
   }
 
   create() {
+    bootStatus("loading assets");
     const cfg = this.cache.json.get("config") as GameConfig;
 
     // Load path data + stages catalog, plus any optional sprite/audio assets.
@@ -49,7 +52,22 @@ export class BootScene extends Phaser.Scene {
     // a background audio load once the start screen is interactive, so audio
     // streams in while the player is reading the start screen.
 
+    let pending = 0;
+    let loaded = 0;
+    this.load.on(Phaser.Loader.Events.ADD, () => {
+      pending++;
+      bootStatus(`loading ${loaded}/${pending}`);
+    });
+    this.load.on(Phaser.Loader.Events.FILE_COMPLETE, () => {
+      loaded++;
+      bootStatus(`loading ${loaded}/${pending}`);
+    });
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      bootStatus(`load error: ${file.key} (${file.url})`);
+    });
+
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      bootStatus("preparing scene");
       this.generateMissingTextures(cfg);
       const pathData = this.cache.json.get("path") as PathData;
       const stagesData = this.cache.json.get("stages") as StagesData;

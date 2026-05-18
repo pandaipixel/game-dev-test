@@ -143,8 +143,34 @@
     <div id="game"></div>
     <div id="loading">
       <div class="spinner"></div>
-      <div>LOADING</div>
+      <div id="loading-status">LOADING</div>
     </div>
+    <script>
+      // Visible-on-page error reporting so we can see what's happening on
+      // mobile / production where DevTools isn't easily available.
+      (function () {
+        var show = function (label, msg) {
+          var el = document.createElement('div');
+          el.style.cssText =
+            'position:fixed;left:8px;right:8px;top:auto;bottom:8px;' +
+            'background:#9e131f;color:#fff;padding:10px 14px;border-radius:8px;' +
+            'font:12px/1.4 monospace;z-index:50;white-space:pre-wrap;word-break:break-word;';
+          el.textContent = '[' + label + '] ' + msg;
+          document.body.appendChild(el);
+        };
+        window.addEventListener('error', function (e) {
+          show('ERROR', (e.message || 'unknown') + '\n@ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason;
+          show('REJECT', (r && r.message) || String(r));
+        });
+        window.__bootStatus = function (msg) {
+          var s = document.getElementById('loading-status');
+          if (s) s.textContent = msg.toUpperCase();
+        };
+      })();
+    </script>
     <div class="rotate-hint">
       <div class="phone"></div>
       <div class="label">ROTATE YOUR DEVICE</div>

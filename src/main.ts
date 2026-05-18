@@ -3,9 +3,22 @@ import { BootScene } from "./scenes/BootScene";
 import { StartScene } from "./scenes/StartScene";
 import { GameScene } from "./scenes/GameScene";
 
+declare global {
+  interface Window {
+    __bootStatus?: (msg: string) => void;
+  }
+}
+
+const status = (m: string) => window.__bootStatus?.(m);
+
+status("fetching config");
 fetch("./config.json")
-  .then((r) => r.json())
+  .then((r) => {
+    if (!r.ok) throw new Error(`config.json HTTP ${r.status}`);
+    return r.json();
+  })
   .then((cfg) => {
+    status("starting phaser");
     new Phaser.Game({
       type: Phaser.AUTO,
       parent: "game",
@@ -31,4 +44,7 @@ fetch("./config.json")
     // once BootScene has finished downloading every asset and the start
     // screen is about to render. Removing it earlier (e.g. on Phaser READY)
     // leaves the player staring at a black canvas while the loader runs.
+  })
+  .catch((err) => {
+    status("config fetch failed: " + (err?.message ?? err));
   });
