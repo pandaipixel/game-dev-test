@@ -18,6 +18,18 @@ fetch("./config.json")
     return r.json();
   })
   .then((cfg) => {
+    // Mobile overrides — touch-primary devices get a smaller design canvas
+    // and chunkier balls so the play area feels reasonable on small screens.
+    const isTouchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (isTouchPrimary && cfg.mobile) {
+      const m = cfg.mobile;
+      if (m.game) Object.assign(cfg.game, m.game);
+      if (m.balls) Object.assign(cfg.balls, m.balls);
+      if (m.shooter) Object.assign(cfg.shooter, m.shooter);
+    }
+
     status("starting phaser");
     new Phaser.Game({
       type: Phaser.AUTO,

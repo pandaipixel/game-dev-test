@@ -142,7 +142,17 @@ export class StartScene extends Phaser.Scene {
       x: width / 2,
       y: cursorY + BUTTON_H / 2,
       label: "Start Game",
-      onClick: () => this.scene.start("Game", { ...data, stage }),
+      onClick: () => {
+        // On touch-primary devices, claim the browser chrome's space via
+        // the Fullscreen API. Silently no-ops where unsupported (iOS Safari).
+        const isTouchPrimary =
+          typeof window !== "undefined" &&
+          window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+        if (isTouchPrimary && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+        this.scene.start("Game", { ...data, stage });
+      },
     });
 
     // Footer hint

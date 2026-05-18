@@ -79,5 +79,11 @@
     "warningTime": "assets/sfx/warning_time.wav",
     "bgmVolume": 0.35,
     "sfxVolume": 0.75
+  },
+  "mobile": {
+    "$note": "Overrides applied when matchMedia('(hover:none) and (pointer:coarse)') matches. Stage path coordinates are auto-scaled from the authored 1280x720 canvas to the mobile dimensions.",
+    "game": { "width": 1024, "height": 576 },
+    "balls": { "radius": 24, "spacing": 50 },
+    "shooter": { "x": 512, "y": 288 }
   }
 }

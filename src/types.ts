@@ -126,6 +126,17 @@ export interface GameConfig {
     bgmVolume: number;
     sfxVolume: number;
   };
+  /**
+   * Per-field overrides applied at boot when the device is touch-primary
+   * (`matchMedia("(hover: none) and (pointer: coarse)")`). Stage path
+   * coordinates are auto-rescaled from the authored 1280x720 canvas to the
+   * mobile canvas dimensions.
+   */
+  mobile?: {
+    game?: { width?: number; height?: number };
+    balls?: { radius?: number; spacing?: number };
+    shooter?: { x?: number; y?: number };
+  };
 }
 
 export const TEX = {

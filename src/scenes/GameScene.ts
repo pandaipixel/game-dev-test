@@ -112,11 +112,25 @@ export class GameScene extends Phaser.Scene {
         .setDisplaySize(this.scale.width, this.scale.height);
     }
 
-    // Build every lane from the stage definition
+    // Build every lane from the stage definition. Path waypoints are
+    // authored at 1280x720; when the actual game canvas is smaller (mobile
+    // override), we rescale all coordinates uniformly so the path fits.
+    const AUTHORED_W = 1280;
+    const AUTHORED_H = 720;
+    const sx = this.cfg.game.width / AUTHORED_W;
+    const sy = this.cfg.game.height / AUTHORED_H;
+    const needsScale = sx !== 1 || sy !== 1;
+
     const laneDefs = this.resolveStageLanes(data);
     for (const def of laneDefs) {
-      const lanePoints: { x: number; y: number }[] =
+      let lanePoints: { x: number; y: number }[] =
         def.generator ? generatePath(def.generator) : (def.points ?? []);
+      if (needsScale) {
+        lanePoints = lanePoints.map((p) => ({
+          x: Math.round(p.x * sx),
+          y: Math.round(p.y * sy),
+        }));
+      }
       const pts = lanePoints.flatMap((p) => [p.x, p.y]);
       const path = new Phaser.Curves.Spline(pts);
       const samples = this.buildSamples(path, 400);
