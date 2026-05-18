@@ -43,11 +43,15 @@
         -webkit-touch-callout: none;
       }
       body {
-        /* dynamic viewport height — keeps canvas visible when mobile chrome shows/hides */
+        /* 100vh fallback for older browsers that don't recognize dvh;
+           modern browsers (Safari 15.4+, Chrome 108+) use dvh which
+           accounts for the dynamic mobile chrome show/hide. */
+        height: 100vh;
         height: 100dvh;
       }
       #game {
         width: 100vw;
+        height: 100vh;
         height: 100dvh;
         position: fixed;
         inset: 0;
