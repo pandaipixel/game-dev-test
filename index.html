@@ -89,7 +89,12 @@
         animation: spin 0.9s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      #game:has(canvas) ~ #loading { display: none; }
+      /* The splash is removed explicitly by StartScene.create() once the
+         BootScene has finished loading all assets — see src/scenes/StartScene.ts.
+         Earlier we hid it via `#game:has(canvas) ~ #loading { display: none; }`
+         but Phaser appends its canvas inside the Phaser.Game constructor
+         (before BootScene's loader runs), which hid the splash too early and
+         left the player staring at a dark canvas. */
 
       /* Portrait-orientation hint on small screens — non-blocking */
       .rotate-hint {
