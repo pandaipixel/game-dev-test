@@ -59,6 +59,7 @@ export class GameScene extends Phaser.Scene {
   private readonly maxBounces = 3;
 
   private aimGuide!: Phaser.GameObjects.Graphics;
+  private aimArrow!: Phaser.GameObjects.Graphics;
   private lastAimX = 0;
   private lastAimY = 0;
 
@@ -139,6 +140,9 @@ export class GameScene extends Phaser.Scene {
 
     // Aim guide — dotted line trajectory preview (drawn behind the shooter)
     this.aimGuide = this.add.graphics();
+    // Aim arrow — small yellow chevron that always shows the current aim
+    // direction on top of the loaded ball, independent of powerup state.
+    this.aimArrow = this.add.graphics().setDepth(11);
     this.lastAimX = this.cfg.shooter.x;
     this.lastAimY = this.cfg.shooter.y - 100; // default: pointing up
 
@@ -149,6 +153,7 @@ export class GameScene extends Phaser.Scene {
     this.loadedBall = this.add.image(this.cfg.shooter.x, this.cfg.shooter.y, TEX.ball(this.nextColor.id));
     this.sizeBall(this.loadedBall);
     this.pickNextShooterBall(); // rolls for arrow powerup on the first load
+    this.aimAt(this.lastAimX, this.lastAimY); // draw the directional arrow at default angle
 
     // Initial chain — force-spawn the starting buffer for each lane
     for (const lane of this.lanes) {
@@ -259,9 +264,33 @@ export class GameScene extends Phaser.Scene {
       this.bgm?.destroy();
     });
 
-    // Input
-    this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.aimAt(p.worldX, p.worldY));
-    this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.fire(p.worldX, p.worldY));
+    // Input — touch devices get a hold-and-release model so the player can
+    // refine aim with their finger before releasing. Mouse devices keep
+    // hover-to-aim + click-to-fire which is the desktop standard.
+    const isTouchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+
+    if (isTouchPrimary) {
+      let holding = false;
+      this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        holding = true;
+        this.aimAt(p.worldX, p.worldY);
+      });
+      this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+        if (holding) this.aimAt(p.worldX, p.worldY);
+      });
+      this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+        if (holding) {
+          holding = false;
+          this.fire(p.worldX, p.worldY);
+        }
+      });
+      this.input.on("pointerupoutside", () => { holding = false; });
+    } else {
+      this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.aimAt(p.worldX, p.worldY));
+      this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.fire(p.worldX, p.worldY));
+    }
     this.input.keyboard?.on("keydown-R", () => {
       if (this.gameOver) this.scene.restart(this.restartData);
     });
@@ -419,6 +448,47 @@ export class GameScene extends Phaser.Scene {
     this.shooter.setRotation(ang + Math.PI / 2);
     this.lastAimX = x;
     this.lastAimY = y;
+    this.drawAimArrow(ang);
+  }
+
+  /**
+   * Always-on directional indicator — a small yellow chevron drawn just outside
+   * the loaded ball in the aim direction, so the player can see exactly where
+   * the shot will go even without the arrow-powerup aim guide.
+   */
+  private drawAimArrow(ang: number) {
+    const g = this.aimArrow;
+    g.clear();
+    const r = this.cfg.balls.radius;
+    const offset = r * 1.9;        // distance from shooter center
+    const len = 14;                // arrow length
+    const halfWidth = 8;           // arrow back-half width
+    const cx = this.shooter.x + Math.cos(ang) * offset;
+    const cy = this.shooter.y + Math.sin(ang) * offset;
+    const tipX = cx + Math.cos(ang) * len;
+    const tipY = cy + Math.sin(ang) * len;
+    const backX = cx - Math.cos(ang) * (len * 0.25);
+    const backY = cy - Math.sin(ang) * (len * 0.25);
+    // Perpendicular for back corners
+    const perpX = -Math.sin(ang);
+    const perpY = Math.cos(ang);
+    const leftX = backX + perpX * halfWidth;
+    const leftY = backY + perpY * halfWidth;
+    const rightX = backX - perpX * halfWidth;
+    const rightY = backY - perpY * halfWidth;
+
+    const yellow = Phaser.Display.Color.HexStringToColor(this.cfg.theme.brand.yellow).color;
+    const brick = Phaser.Display.Color.HexStringToColor(this.cfg.theme.brand.brick).color;
+
+    g.fillStyle(yellow, 1);
+    g.lineStyle(2, brick, 1);
+    g.beginPath();
+    g.moveTo(tipX, tipY);
+    g.lineTo(leftX, leftY);
+    g.lineTo(rightX, rightY);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
   }
 
   private pickNextShooterBall() {

@@ -1,7 +1,7 @@
 {
   "game": {
-    "width": 960,
-    "height": 640,
+    "width": 1280,
+    "height": 720,
     "backgroundColor": "#031034",
     "timeLimitSec": 180,
     "finalRushAtSecRemaining": 60,
@@ -42,8 +42,8 @@
     "speedupFactor": 1.08
   },
   "shooter": {
-    "x": 480,
-    "y": 320,
+    "x": 640,
+    "y": 360,
     "sprite": null,
     "projectileSpeedPxPerSec": 900,
     "reloadMs": 180,

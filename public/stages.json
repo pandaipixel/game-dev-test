@@ -1,5 +1,5 @@
 {
-  "$schema-note": "Each stage either supplies `points` (hand-authored waypoints) OR a `generator` (parametric path). See src/path/pathGenerators.ts for generator params. Optional `overrides` tweak chain speed / time limit / spawn etc. for that stage only.",
+  "$schema-note": "Each stage either supplies `points` (hand-authored waypoints) OR a `generator` (parametric path). See src/path/pathGenerators.ts for generator params. Optional `overrides` tweak chain speed / time limit / spawn etc. for that stage only. Coordinates are in the 1280x720 design canvas.",
   "stages": [
     {
       "id": "ruby-spiral",
@@ -7,14 +7,14 @@
       "description": "Classic spiral around the heart — 2 turns inward.",
       "generator": {
         "type": "spiral",
-        "center": [480, 320],
-        "startRadius": 320,
-        "endRadius": 60,
+        "center": [640, 360],
+        "startRadius": 340,
+        "endRadius": 70,
         "turns": 2,
         "startAngleDeg": 180,
         "clockwise": true,
         "samples": 26,
-        "leadIn": { "from": [-40, 220], "to": [160, 200], "steps": 3 }
+        "leadIn": { "from": [-40, 250], "to": [200, 230], "steps": 3 }
       }
     },
     {
@@ -23,14 +23,14 @@
       "description": "Faster chain, three tight turns. Demands sharp matches.",
       "generator": {
         "type": "spiral",
-        "center": [480, 320],
-        "startRadius": 300,
-        "endRadius": 50,
+        "center": [640, 360],
+        "startRadius": 340,
+        "endRadius": 60,
         "turns": 3,
         "startAngleDeg": 200,
         "clockwise": true,
         "samples": 32,
-        "leadIn": { "from": [-40, 280], "to": [180, 240], "steps": 3 }
+        "leadIn": { "from": [-40, 320], "to": [220, 280], "steps": 3 }
       },
       "overrides": {
         "chainSpeedPxPerSec": 28,
@@ -42,40 +42,23 @@
       "name": "Ruby Diamond",
       "description": "Four-point diamond outline — hand-authored.",
       "points": [
-        { "x": -40, "y": 220 },
-        { "x": 200, "y": 130 },
-        { "x": 340, "y": 95  },
-        { "x": 480, "y": 80  },
-        { "x": 620, "y": 95  },
-        { "x": 760, "y": 175 },
-        { "x": 830, "y": 320 },
-        { "x": 760, "y": 465 },
-        { "x": 620, "y": 545 },
-        { "x": 480, "y": 560 },
-        { "x": 340, "y": 545 },
-        { "x": 200, "y": 465 },
-        { "x": 130, "y": 320 },
-        { "x": 280, "y": 320 },
-        { "x": 400, "y": 320 },
-        { "x": 480, "y": 320 }
+        { "x": -40,  "y": 250 },
+        { "x": 240,  "y": 150 },
+        { "x": 440,  "y": 105 },
+        { "x": 640,  "y": 90  },
+        { "x": 840,  "y": 105 },
+        { "x": 1020, "y": 195 },
+        { "x": 1100, "y": 360 },
+        { "x": 1020, "y": 525 },
+        { "x": 840,  "y": 615 },
+        { "x": 640,  "y": 630 },
+        { "x": 440,  "y": 615 },
+        { "x": 260,  "y": 525 },
+        { "x": 170,  "y": 360 },
+        { "x": 360,  "y": 360 },
+        { "x": 520,  "y": 360 },
+        { "x": 640,  "y": 360 }
       ]
-    },
-    {
-      "id": "snake-pit",
-      "name": "Snake Pit",
-      "description": "Serpentine — chain weaves left-right across the screen.",
-      "generator": {
-        "type": "serpentine",
-        "startX": -40,
-        "endX": 920,
-        "topY": 110,
-        "bottomY": 540,
-        "rows": 4
-      },
-      "overrides": {
-        "chainSpeedPxPerSec": 18,
-        "timeLimitSec": 150
-      }
     },
     {
       "id": "temple-coil",
@@ -85,31 +68,31 @@
         {
           "generator": {
             "type": "doubleLoop",
-            "center": [240, 320],
-            "outerRadius": 195,
-            "innerRadius": 72,
+            "center": [320, 360],
+            "outerRadius": 220,
+            "innerRadius": 80,
             "startAngleDeg": 180,
             "clockwise": true,
             "loopExtraDeg": 25,
             "transitionDeg": 95,
             "outerSamples": 16,
             "innerSamples": 12,
-            "leadIn": { "from": [-40, 320], "to": [40, 320], "steps": 3 }
+            "leadIn": { "from": [-40, 360], "to": [60, 360], "steps": 3 }
           }
         },
         {
           "generator": {
             "type": "doubleLoop",
-            "center": [720, 320],
-            "outerRadius": 195,
-            "innerRadius": 72,
+            "center": [960, 360],
+            "outerRadius": 220,
+            "innerRadius": 80,
             "startAngleDeg": 0,
             "clockwise": false,
             "loopExtraDeg": 25,
             "transitionDeg": 95,
             "outerSamples": 16,
             "innerSamples": 12,
-            "leadIn": { "from": [1000, 320], "to": [920, 320], "steps": 3 }
+            "leadIn": { "from": [1320, 360], "to": [1220, 360], "steps": 3 }
           }
         }
       ],
@@ -120,15 +103,32 @@
       }
     },
     {
+      "id": "snake-pit",
+      "name": "Snake Pit",
+      "description": "Serpentine — chain weaves left-right across the screen.",
+      "generator": {
+        "type": "serpentine",
+        "startX": -40,
+        "endX": 1240,
+        "topY": 120,
+        "bottomY": 620,
+        "rows": 4
+      },
+      "overrides": {
+        "chainSpeedPxPerSec": 18,
+        "timeLimitSec": 150
+      }
+    },
+    {
       "id": "twin-pearls",
       "name": "Twin Pearls",
       "description": "Lemniscate (∞) — two lobes around the heart.",
       "generator": {
         "type": "figureEight",
-        "center": [480, 320],
-        "lobeRadius": 360,
+        "center": [640, 360],
+        "lobeRadius": 420,
         "samples": 40,
-        "leadIn": { "from": [-40, 320], "to": [120, 320], "steps": 3 }
+        "leadIn": { "from": [-40, 360], "to": [140, 360], "steps": 3 }
       },
       "overrides": {
         "chainSpeedPxPerSec": 24
