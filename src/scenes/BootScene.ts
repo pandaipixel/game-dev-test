@@ -25,11 +25,17 @@ export class BootScene extends Phaser.Scene {
     if (cfg.assets.startBackground) {
       this.load.image(TEX.startBackground, cfg.assets.startBackground);
     }
+    if (cfg.assets.startBackgroundMobile) {
+      this.load.image(TEX.startBackgroundMobile, cfg.assets.startBackgroundMobile);
+    }
     if (cfg.assets.logo) {
       this.load.image(TEX.logo, cfg.assets.logo);
     }
     if (cfg.assets.bombImage) {
       this.load.image(TEX.bomb, cfg.assets.bombImage);
+    }
+    if (cfg.assets.startButton) {
+      this.load.image(TEX.startButton, cfg.assets.startButton);
     }
     if (cfg.shooter.sprite) {
       this.load.image(TEX.shooter, cfg.shooter.sprite);

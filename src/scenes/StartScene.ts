@@ -28,9 +28,17 @@ export class StartScene extends Phaser.Scene {
       data.stagesData.stages[0];
 
     // Backdrop — deep brand black + optional cover-scaled image + red vignette.
+    // Picks the mobile-tuned background on touch-primary devices when available.
     this.add.rectangle(width / 2, height / 2, width, height, hex(t.brand.black));
-    if (this.textures.exists(TEX.startBackground)) {
-      const bg = this.add.image(width / 2, height / 2, TEX.startBackground).setOrigin(0.5);
+    const isTouchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    const bgKey =
+      isTouchPrimary && this.textures.exists(TEX.startBackgroundMobile)
+        ? TEX.startBackgroundMobile
+        : TEX.startBackground;
+    if (this.textures.exists(bgKey)) {
+      const bg = this.add.image(width / 2, height / 2, bgKey).setOrigin(0.5);
       const scale = Math.max(width / bg.width, height / bg.height);
       bg.setScale(scale);
     }

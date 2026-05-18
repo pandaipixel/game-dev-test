@@ -66,8 +66,10 @@
   "assets": {
     "background": null,
     "startBackground": "assets/background_start.png",
+    "startBackgroundMobile": "assets/background_start_mobile.png",
     "logo": "assets/logo.png",
-    "bombImage": "assets/bomb_ball.png"
+    "bombImage": "assets/bomb_ball.png",
+    "startButton": "assets/Button/start_button.png"
   },
   "audio": {
     "bgm": "assets/sfx/game_bgm.wav",

@@ -112,8 +112,10 @@ export interface GameConfig {
   assets: {
     background: string | null;
     startBackground: string | null;
+    startBackgroundMobile: string | null;
     logo: string | null;
     bombImage: string | null;
+    startButton: string | null;
   };
   audio: {
     bgm: string | null;
@@ -131,10 +133,12 @@ export const TEX = {
   shooter: "shooter",
   background: "background",
   startBackground: "start-background",
+  startBackgroundMobile: "start-background-mobile",
   logo: "logo",
   rubySpark: "ruby-spark",
   arrow: "arrow-powerup",
   bomb: "bomb-powerup",
+  startButton: "start-button",
 };
 
 export const SFX = {
