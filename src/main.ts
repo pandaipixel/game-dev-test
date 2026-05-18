@@ -6,7 +6,7 @@ import { GameScene } from "./scenes/GameScene";
 fetch("./config.json")
   .then((r) => r.json())
   .then((cfg) => {
-    new Phaser.Game({
+    const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: "game",
       backgroundColor: cfg.game.backgroundColor,
@@ -18,7 +18,6 @@ fetch("./config.json")
         width: cfg.game.width,
         height: cfg.game.height,
         parent: "game",
-        expandParent: false,
       },
       input: {
         activePointers: 2, // allow at least one touch + UI tap
@@ -26,5 +25,10 @@ fetch("./config.json")
       scene: [BootScene, StartScene, GameScene],
       render: { antialias: true },
       physics: { default: "arcade", arcade: { debug: false } },
+    });
+
+    // Hide the loading splash once Phaser's core systems are up.
+    game.events.once(Phaser.Core.Events.READY, () => {
+      document.getElementById("loading")?.remove();
     });
   });
