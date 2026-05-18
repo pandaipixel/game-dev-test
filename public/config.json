@@ -26,12 +26,12 @@
     "radius": 18,
     "spacing": 36,
     "colors": [
-      { "id": "emerald",  "hex": "#1F8A55", "sprite": "assets/basic_ball.png" },
-      { "id": "ruby",     "hex": "#AF1726", "sprite": "assets/red_ball.png" },
-      { "id": "gold",     "hex": "#FFB603", "sprite": "assets/yellow_ball.png" },
-      { "id": "sapphire", "hex": "#133B9F", "sprite": "assets/blue_ball.png" },
-      { "id": "amethyst", "hex": "#6B2DAA", "sprite": "assets/purple_ball.png" },
-      { "id": "pink",     "hex": "#FF6EC7", "sprite": "assets/pink_ball.png" }
+      { "id": "emerald",  "hex": "#1F8A55", "sprite": "assets/basic_ball.webp" },
+      { "id": "ruby",     "hex": "#AF1726", "sprite": "assets/red_ball.webp" },
+      { "id": "gold",     "hex": "#FFB603", "sprite": "assets/yellow_ball.webp" },
+      { "id": "sapphire", "hex": "#133B9F", "sprite": "assets/blue_ball.webp" },
+      { "id": "amethyst", "hex": "#6B2DAA", "sprite": "assets/purple_ball.webp" },
+      { "id": "pink",     "hex": "#FF6EC7", "sprite": "assets/pink_ball.webp" }
     ]
   },
   "chain": {
@@ -65,10 +65,10 @@
   },
   "assets": {
     "background": null,
-    "startBackground": "assets/background_start.png",
-    "startBackgroundMobile": "assets/background_start_mobile.png",
-    "logo": "assets/logo.png",
-    "bombImage": "assets/bomb_ball.png",
+    "startBackground": "assets/background_start.webp",
+    "startBackgroundMobile": "assets/background_start_mobile.webp",
+    "logo": "assets/logo.webp",
+    "bombImage": "assets/bomb_ball.webp",
     "startButton": "assets/Button/start_button.png"
   },
   "audio": {
