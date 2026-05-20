@@ -74,10 +74,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   _makePipe() {
-    // A vertical obstacle. Stored as a 64x600 texture; instances are cropped
-    // or tiled by the GameScene as needed.
+    // A vertical obstacle. Sized as tall as the game world so a pipe always
+    // spans from its gap edge to the top/bottom of the screen, whatever the
+    // device aspect ratio works out to.
     const w = 64;
-    const h = 600;
+    const h = this.scale.height;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     g.fillStyle(PALETTE.royalBlue, 1);
     g.fillRect(0, 0, w, h);

@@ -334,10 +334,11 @@ export class GameScene extends Phaser.Scene {
     const gap   = this._ramp(DIFFICULTY.pipeGap);
     const speed = this._ramp(DIFFICULTY.pipeSpeed);
 
-    const maxTop = GAME.height - FLOOR_HEIGHT - gap - PIPE_BOTTOM_MARGIN;
+    const pipeH  = this.scale.height; // 'pipe' texture is world-height tall
+    const maxTop = this.scale.height - FLOOR_HEIGHT - gap - PIPE_BOTTOM_MARGIN;
     const gapTop = Phaser.Math.Between(PIPE_MIN_TOP, maxTop);
 
-    // Top pipe: a `pipe` texture (64x600) positioned so its bottom is gapTop
+    // Top pipe positioned so its bottom edge sits at gapTop
     const top = this.pipes.create(width + 40, gapTop, 'pipe')
       .setOrigin(0.5, 1)
       .setDepth(10);
@@ -345,7 +346,7 @@ export class GameScene extends Phaser.Scene {
     top.body.setAllowGravity(false);
     top.body.setImmovable(true);
     // hitbox matches visible texture
-    top.body.setSize(64, 600);
+    top.body.setSize(64, pipeH);
     top.body.setOffset(0, 0);
 
     const bottom = this.pipes.create(width + 40, gapTop + gap, 'pipe')
@@ -354,7 +355,7 @@ export class GameScene extends Phaser.Scene {
     bottom.body.setVelocityX(-speed);
     bottom.body.setAllowGravity(false);
     bottom.body.setImmovable(true);
-    bottom.body.setSize(64, 600);
+    bottom.body.setSize(64, pipeH);
     bottom.body.setOffset(0, 0);
 
     // 60% chance of a ruby in the gap — jitter is scaled to the gap so the

@@ -4,6 +4,15 @@ import { StartScene } from './scenes/StartScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 
+// The game has a fixed design width (GAME.width). Its height is sized to the
+// device's aspect ratio so Phaser's FIT mode fills the whole screen with no
+// letterbox bars. Clamped so it is never shorter than the original design
+// height (short/wide screens like desktop keep the full layout) and never
+// absurdly tall on pathological viewports.
+const MAX_HEIGHT = 1400;
+const aspectHeight = Math.round(GAME.width * window.innerHeight / window.innerWidth);
+const gameHeight = Math.max(GAME.height, Math.min(MAX_HEIGHT, aspectHeight));
+
 const config = {
   type: Phaser.AUTO,
   parent: 'game-canvas-wrap',
@@ -15,7 +24,7 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width:  GAME.width,
-    height: GAME.height,
+    height: gameHeight,
   },
   physics: {
     default: 'arcade',
