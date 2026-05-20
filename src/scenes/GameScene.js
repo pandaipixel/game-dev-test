@@ -1,4 +1,4 @@
-import { GAME, DIFFICULTY, MAGNET, PALETTE, PALETTE_CSS, FONTS } from '../config.js';
+import { GAME, DIFFICULTY, MAGNET, RUSH, PALETTE, PALETTE_CSS, FONTS } from '../config.js';
 import { addMuteButton } from '../muteButton.js';
 
 const FLOOR_HEIGHT       = 80;
@@ -13,6 +13,18 @@ const PIPE_BOTTOM_MARGIN = 60;    // min px between pipe gap and the floor
 const RUBY_SIZE          = 44;    // gameplay ruby pickup, px
 const HUD_RUBY_SIZE      = 34;    // ruby icon in the HUD, px
 const MAGNET_SIZE        = 58;    // magnet power-up bubble, px
+
+// Ruby pickup formations — offsets are built in _spawnFormation().
+const LINE_SPACING       = 56;    // vertical gap between rubies in a line
+const WAVE_LENGTH        = 184;   // horizontal span of an S-wave
+const WAVE_AMPLITUDE     = 78;    // vertical swing of an S-wave
+const CIRCLE_RADIUS      = 74;    // radius of a ruby ring
+
+// Power Rush power-up.
+const RUSH_BUBBLE_SIZE   = 68;    // pwr orb display size, px
+const RAINBOW            = [      // sparkle hues ringing the rush bubble
+  0xff3b3b, 0xff9e2c, 0xffe23d, 0x4cd964, 0x34c5e8, 0x4b7bec, 0xc44cff,
+];
 
 // Parallax: the scenery drifts left at this fraction of the (ramping)
 // pipe speed — slower than the obstacles, so it reads as distant depth.
@@ -30,7 +42,11 @@ export class GameScene extends Phaser.Scene {
     this.timeRemainingMs = GAME.roundDurationMs;
     this.elapsedMs      = 0;
     this.magnetActive   = false;
-    this.powerups       = [];   // active magnet bubbles on screen
+    this.magnetDue      = false; // a magnet roll succeeded; next lane spawns it
+    this.powerups       = [];   // active power-up bubbles on screen
+    this.rushActive     = false;
+    this.rushDue        = false; // a rush roll succeeded; next lane spawns it
+    this.rushTrailAcc   = 0;     // throttles the speed-trail during a rush
 
     this._drawBackground();
     this._createFloorAndCeiling();
@@ -42,7 +58,9 @@ export class GameScene extends Phaser.Scene {
     // game music — loops for the whole round, stops when the scene ends
     this.gameBgm = this.sound.add('game-bgm', { loop: true, volume: 0.45 });
     this.gameBgm.play();
-    this.events.once('shutdown', () => this.gameBgm.stop());
+    // power-rush music — added now, played only while the power-up is active
+    this.rushBgm = this.sound.add('pwr-bgm', { loop: true, volume: 0.5 });
+    this.events.once('shutdown', () => { this.gameBgm.stop(); this.rushBgm.stop(); });
 
     // mute toggle, created before input so the flap handler can skip it
     this.muteBtn = addMuteButton(this, this.scale.width - 30, HUD_HEIGHT / 2);
@@ -63,9 +81,11 @@ export class GameScene extends Phaser.Scene {
       this._updateHud();
 
       // parallax scroll — scenery drifts left, speeding up with the ramp.
-      // tilePositionX is in texture px, so divide the desired screen-px
-      // movement by tileScaleX.
-      const bgSpeed = this._ramp(DIFFICULTY.pipeSpeed) * BG_SCROLL_FACTOR;
+      // During a power rush the scenery races by at RUSH.bgScrollMultiplier x
+      // its normal speed for a dramatic sense of velocity. tilePositionX is in
+      // texture px, so divide the desired screen-px movement by tileScaleX.
+      const bgBoost = this.rushActive ? RUSH.bgScrollMultiplier : 1;
+      const bgSpeed = this._ramp(DIFFICULTY.pipeSpeed) * BG_SCROLL_FACTOR * bgBoost;
       this.bg.tilePositionX += bgSpeed * (deltaMs / 1000) / this.bg.tileScaleX;
 
       // tilt pbot toward velocity for a satisfying arc
@@ -73,16 +93,26 @@ export class GameScene extends Phaser.Scene {
       const target = Phaser.Math.Clamp(vy * 0.08, -25, 70);
       this.pbot.angle += (target - this.pbot.angle) * 0.1;
 
-      // cleanup off-screen obstacles + rubies
+      // cleanup off-screen obstacles + rubies (kill tweens first so the
+      // spin/bob loops don't outlive the sprite)
       this.pipes.children.iterate((p) => {
         if (p && p.x < -100) p.destroy();
       });
       this.rubies.children.iterate((r) => {
-        if (r && r.x < -40) r.destroy();
+        if (r && r.x < -40) { this.tweens.killTweensOf(r); r.destroy(); }
       });
 
       this._updatePowerups(deltaMs);
       this._updateMagnetPull();
+
+      // power-rush speed trail — faint red afterimages of pbot
+      if (this.rushActive) {
+        this.rushTrailAcc += deltaMs;
+        if (this.rushTrailAcc >= 70) {
+          this.rushTrailAcc = 0;
+          this._spawnRushTrail();
+        }
+      }
     }
   }
 
@@ -139,12 +169,17 @@ export class GameScene extends Phaser.Scene {
     this.pbot = this.physics.add.image(PBOT_START_X, this.scale.height * 0.45, 'pbot')
       .setScale(PBOT_SCALE);
 
-    // tighter hitbox than the full sprite to keep collisions feeling fair
-    // (pbot.png is 432x578; central body roughly fills the middle 70%).
-    this.pbot.body.setSize(280, 380);
-    this.pbot.body.setOffset(76, 90);
+    // Hitbox: pbot.webp is 432x578 with the character core spanning roughly
+    // x[40,405], y[135,460] (centre ~222,297) — the two teal side-orbs are
+    // decorative and excluded. The body is a slightly-inset rect centred on
+    // that core, so collisions feel fair and ruby pickups still land cleanly.
+    this.pbot.body.setSize(250, 300);
+    this.pbot.body.setOffset(97, 147);
     this.pbot.body.setCollideWorldBounds(false);
     this.pbot.body.allowGravity = false; // turned on at first flap
+
+    // sits above the scenery so the power-rush speed trail can render behind it
+    this.pbot.setDepth(5);
   }
 
   _createGroups() {
@@ -265,19 +300,27 @@ export class GameScene extends Phaser.Scene {
     this.pbot.body.allowGravity = true;
     this.physics.world.gravity.y = GAME.gravity;
 
-    // the ruby spawner stays a steady loop; the pipe spawner reschedules
-    // itself each time so its interval can tighten as difficulty ramps
-    this.rubyTimer = this.time.addEvent({
-      delay: GAME.rubySpawnEveryMs,
-      loop:  true,
-      callback: () => this._spawnSoloRuby(),
-    });
-
-    // magnet power-up — each roll has MAGNET.spawnChance to spawn a bubble
+    // Magnet power-up — each roll has MAGNET.spawnChance to arm a magnet; the
+    // next between-columns lane slot then spawns the bubble (see
+    // _spawnLaneCollectible), so it lands clear of the pillars.
     this.magnetTimer = this.time.addEvent({
       delay: MAGNET.spawnEveryMs,
       loop:  true,
-      callback: () => this._maybeSpawnMagnet(),
+      callback: () => {
+        if (!this.gameOver && Math.random() < MAGNET.spawnChance) this.magnetDue = true;
+      },
+    });
+
+    // Power Rush — rarer than the magnet; an armed roll spawns a pwr bubble
+    // in the next lane. Suppressed while a rush is already running.
+    this.rushTimer = this.time.addEvent({
+      delay: RUSH.spawnEveryMs,
+      loop:  true,
+      callback: () => {
+        if (!this.gameOver && !this.rushActive && Math.random() < RUSH.spawnChance) {
+          this.rushDue = true;
+        }
+      },
     });
 
     // first pair immediately so the player has something to dodge,
@@ -300,17 +343,25 @@ export class GameScene extends Phaser.Scene {
     return Phaser.Math.Linear(range.start, range.end, this._rampProgress());
   }
 
+  // World scroll speed right now: the difficulty ramp, boosted while a
+  // power rush is active.
+  _currentSpeed() {
+    const base = this._ramp(DIFFICULTY.pipeSpeed);
+    return this.rushActive ? base * RUSH.speedMultiplier : base;
+  }
+
   // Schedules the next pipe pair using the current (ramping) spawn interval,
-  // then re-arms itself — so the delay shrinks as the round progresses.
+  // then re-arms itself — so the delay shrinks as the round progresses. A
+  // "lane" collectible is also scheduled for the half-way point, so it drifts
+  // in through the clear space between this pillar column and the next.
   _scheduleNextPipe() {
     if (this.gameOver) return;
-    this.pipeTimer = this.time.delayedCall(
-      this._ramp(DIFFICULTY.pipeSpawnEveryMs),
-      () => {
-        this._spawnPipePair();
-        this._scheduleNextPipe();
-      },
-    );
+    const delay = this._ramp(DIFFICULTY.pipeSpawnEveryMs);
+    this.pipeTimer = this.time.delayedCall(delay, () => {
+      this._spawnPipePair();
+      this._scheduleNextPipe();
+    });
+    this.laneTimer = this.time.delayedCall(delay / 2, () => this._spawnLaneCollectible());
   }
 
   _flap() {
@@ -326,65 +377,182 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  _spawnPipePair() {
-    if (this.gameOver) return;
+  // Spawns a pillar pair. Options:
+  //   safe   — widest gap, centred on the player (used for the first pair
+  //            after a power rush so the returning pillars can't clip pbot)
+  //   dropIn — the pair drops into frame from off-screen rather than
+  //            scrolling in from the right edge
+  _spawnPipePair(opts = {}) {
+    if (this.gameOver || this.rushActive) return;
     const { width } = this.scale;
+    const speed  = this._currentSpeed();
+    const pipeH  = this.scale.height; // 'pipe' texture is world-height tall
 
     // gap, speed and (via _scheduleNextPipe) spawn rate all ramp with time
-    const gap   = this._ramp(DIFFICULTY.pipeGap);
-    const speed = this._ramp(DIFFICULTY.pipeSpeed);
+    const gap    = opts.safe ? DIFFICULTY.pipeGap.start : this._ramp(DIFFICULTY.pipeGap);
+    const maxTop = pipeH - FLOOR_HEIGHT - gap - PIPE_BOTTOM_MARGIN;
+    const gapTop = opts.safe
+      ? Phaser.Math.Clamp(this.pbot.y - gap / 2, PIPE_MIN_TOP, maxTop)
+      : Phaser.Math.Between(PIPE_MIN_TOP, maxTop);
 
-    const pipeH  = this.scale.height; // 'pipe' texture is world-height tall
-    const maxTop = this.scale.height - FLOOR_HEIGHT - gap - PIPE_BOTTOM_MARGIN;
-    const gapTop = Phaser.Math.Between(PIPE_MIN_TOP, maxTop);
+    // drop-in pairs land on-screen; normal pairs enter from the right edge
+    const spawnX = opts.dropIn ? Math.round(width * 0.72) : width + 40;
 
-    // Top pipe positioned so its bottom edge sits at gapTop
-    const top = this.pipes.create(width + 40, gapTop, 'pipe')
-      .setOrigin(0.5, 1)
-      .setDepth(10);
-    top.body.setVelocityX(-speed);
-    top.body.setAllowGravity(false);
-    top.body.setImmovable(true);
-    // hitbox matches visible texture
-    top.body.setSize(64, pipeH);
-    top.body.setOffset(0, 0);
+    // top pipe positioned so its bottom edge sits at gapTop
+    const top = this.pipes.create(spawnX, gapTop, 'pipe').setOrigin(0.5, 1).setDepth(10);
+    this._initPillarBody(top, pipeH);
 
-    const bottom = this.pipes.create(width + 40, gapTop + gap, 'pipe')
-      .setOrigin(0.5, 0)
-      .setDepth(10);
-    bottom.body.setVelocityX(-speed);
-    bottom.body.setAllowGravity(false);
-    bottom.body.setImmovable(true);
-    bottom.body.setSize(64, pipeH);
-    bottom.body.setOffset(0, 0);
+    const bottom = this.pipes.create(spawnX, gapTop + gap, 'pipe').setOrigin(0.5, 0).setDepth(10);
+    this._initPillarBody(bottom, pipeH);
 
-    // 60% chance of a ruby in the gap — jitter is scaled to the gap so the
-    // ruby never overlaps a pillar, even at the narrowest setting
-    if (Math.random() < 0.6) {
-      const jitter = Math.max(0, Math.min(40, gap / 2 - 28));
-      const rubyY  = gapTop + gap / 2 + Phaser.Math.Between(-jitter, jitter);
-      this._spawnRubyAt(width + 40, rubyY, speed);
+    if (opts.dropIn) {
+      this._dropPillarIn(top,    gapTop,       speed);
+      this._dropPillarIn(bottom, gapTop + gap, speed);
+    } else {
+      top.body.setVelocityX(-speed);
+      bottom.body.setVelocityX(-speed);
+      // reward placed inside the gap — always clear of both pillars
+      this._spawnGapReward(gapTop, gap, speed);
     }
   }
 
-  _spawnSoloRuby() {
-    if (this.gameOver) return;
-    const { width, height } = this.scale;
-    const y = Phaser.Math.Between(
-      HUD_HEIGHT + 60,
-      height - FLOOR_HEIGHT - 60,
-    );
-    this._spawnRubyAt(width + 20, y, this._ramp(DIFFICULTY.pipeSpeed));
+  // Gives a pillar its static, full-height hitbox.
+  _initPillarBody(pillar, pipeH) {
+    pillar.body.setAllowGravity(false);
+    pillar.body.setImmovable(true);
+    pillar.body.setSize(64, pipeH);  // hitbox matches the visible texture
+    pillar.body.setOffset(0, 0);
   }
 
-  _spawnRubyAt(x, y, speed) {
+  // Drops a single pillar into frame from off-screen, then re-arms its body
+  // so it resumes the normal leftward scroll.
+  _dropPillarIn(pillar, targetY, speed) {
+    const pipeH = this.scale.height;
+    pillar.body.enable = false;                       // no collisions mid-fall
+    pillar.y = pillar.originY === 1 ? -80 : pipeH + 80;
+    this.tweens.add({
+      targets: pillar,
+      y: targetY,
+      duration: 540,
+      ease: 'Bounce.easeOut',
+      onComplete: () => {
+        if (!pillar.active) return;
+        pillar.body.enable = true;
+        pillar.body.reset(pillar.x, pillar.y);
+        this._initPillarBody(pillar, pipeH);
+        pillar.body.setVelocityX(-speed);
+      },
+    });
+  }
+
+  // --- collectible spawning ----------------------------------------------
+  // Every collectible is placed either inside a pillar gap or in the clear
+  // lane between two columns, so rubies and power-ups never overlap a pillar.
+
+  // Reward that rides in the gap of a freshly spawned pillar pair: nothing,
+  // a single ruby, or a compact vertical trio sized to fit the gap.
+  // Odds are tuned for ~0.58 rubies per gap (half the earlier density).
+  _spawnGapReward(gapTop, gap, speed) {
+    const roll = Math.random();
+    if (roll < 0.66) return;                         // empty gap — a breather
+
+    const cx = this.scale.width + 40;
+    const cy = gapTop + gap / 2;
+
+    if (roll < 0.88) {                               // single ruby
+      this._spawnRubyAt(cx, cy, speed);
+      return;
+    }
+    // vertical trio — spacing scaled so all three sit inside the gap
+    const spacing = Math.min(LINE_SPACING, (gap - RUBY_SIZE - 24) / 2);
+    for (let i = -1; i <= 1; i += 1) {
+      this._spawnRubyAt(cx, cy + i * spacing, speed, false);
+    }
+  }
+
+  // Collectible for the clear lane between two pillar columns: a magnet (if
+  // one is armed), a single ruby, or a ruby formation.
+  _spawnLaneCollectible() {
+    if (this.gameOver || this.rushActive) return;
+    const speed = this._currentSpeed();
+
+    if (this.rushDue) {
+      this.rushDue = false;
+      this._spawnRush();
+      return;
+    }
+    if (this.magnetDue) {
+      this.magnetDue = false;
+      this._spawnMagnet();
+      return;
+    }
+
+    // Odds tuned for ~1.5 rubies per lane (half the earlier density) — over
+    // half the lanes are now empty, with formations kept but made rarer.
+    const roll = Math.random();
+    if (roll < 0.55) return;                         // empty lane — a breather
+    if (roll < 0.75) this._spawnRubyAt(this.scale.width + 30, this._laneY(RUBY_SIZE / 2), speed);
+    else if (roll < 0.85) this._spawnFormation('line5',  speed);
+    else if (roll < 0.93) this._spawnFormation('wave',   speed);
+    else                  this._spawnFormation('circle', speed);
+  }
+
+  // A free vertical position for a lane collectible whose vertical half-size
+  // is `halfExtent`, kept fully inside the playable band.
+  _laneY(halfExtent) {
+    const top = HUD_HEIGHT + 60 + halfExtent;
+    const bot = this.scale.height - FLOOR_HEIGHT - 60 - halfExtent;
+    return Phaser.Math.Between(top, Math.max(top, bot));
+  }
+
+  // Spawns a choreographed group of rubies. They all share one velocity, so
+  // the shape holds together as it scrolls across the screen.
+  //   line5  — vertical line of 5
+  //   wave   — 5 rubies along an S-curve
+  //   circle — ring of 6
+  _spawnFormation(type, speed) {
+    const W = this.scale.width;
+    const offsets = [];
+    let anchorX = W + 30;
+    let halfH;
+
+    if (type === 'line5') {
+      for (let i = 0; i < 5; i += 1) offsets.push({ dx: 0, dy: (i - 2) * LINE_SPACING });
+      halfH = 2 * LINE_SPACING;
+    } else if (type === 'wave') {
+      for (let i = 0; i < 5; i += 1) {
+        const t = i / 4;
+        offsets.push({ dx: t * WAVE_LENGTH, dy: Math.sin(t * Math.PI * 2) * WAVE_AMPLITUDE });
+      }
+      halfH = WAVE_AMPLITUDE;
+    } else { // circle
+      const n = 6;
+      for (let i = 0; i < n; i += 1) {
+        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+        offsets.push({ dx: Math.cos(a) * CIRCLE_RADIUS, dy: Math.sin(a) * CIRCLE_RADIUS });
+      }
+      anchorX = W + 30 + CIRCLE_RADIUS; // so the leftmost ruby starts off-screen
+      halfH = CIRCLE_RADIUS;
+    }
+
+    const anchorY = this._laneY(halfH + RUBY_SIZE / 2);
+    offsets.forEach(({ dx, dy }) => {
+      this._spawnRubyAt(anchorX + dx, anchorY + dy, speed, false);
+    });
+  }
+
+  // Creates one ruby. `bob` adds a gentle vertical drift — left off for
+  // formation rubies so the choreographed shape stays crisp.
+  _spawnRubyAt(x, y, speed, bob = true) {
     const ruby = this.rubies.create(x, y, 'ruby').setDepth(11);
     ruby.setDisplaySize(RUBY_SIZE, RUBY_SIZE);
     ruby.body.setVelocityX(-speed);
     ruby.body.setAllowGravity(false);
-    // circular hitbox covering the gem, in texture-space units — the body
-    // scales with the sprite, so this stays correct at any RUBY_SIZE
-    const r = ruby.width * 0.36;
+    // Circular hitbox covering the gem, in texture-space units — the body
+    // scales with the sprite, so this stays correct at any RUBY_SIZE. 0.46
+    // of the texture width makes the pickup radius (~20px on screen) match
+    // the visible gem, so a graze that touches the ruby always collects it.
+    const r = ruby.width * 0.46;
     ruby.body.setCircle(r, ruby.width / 2 - r, ruby.height / 2 - r);
     this.tweens.add({
       targets: ruby,
@@ -393,12 +561,14 @@ export class GameScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Linear',
     });
-    this.tweens.add({
-      targets: ruby,
-      y: y - 8,
-      duration: 900,
-      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    });
+    if (bob) {
+      this.tweens.add({
+        targets: ruby,
+        y: y - 8,
+        duration: 900,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   _collectRuby(ruby) {
@@ -430,15 +600,11 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => plus.destroy(),
     });
 
+    this.tweens.killTweensOf(ruby); // drop the spin/bob loop before destroying
     ruby.destroy();
   }
 
   // --- magnet power-up ----------------------------------------------------
-  _maybeSpawnMagnet() {
-    if (this.gameOver) return;
-    if (Math.random() < MAGNET.spawnChance) this._spawnMagnet();
-  }
-
   // A magnet "bubble" drifts in from the right like a ruby. It is a plain
   // container (moved manually in _updatePowerups) so its bob never fights a
   // physics body; pickup is a simple distance check against the player.
@@ -447,8 +613,10 @@ export class GameScene extends Phaser.Scene {
     const y = Phaser.Math.Between(HUD_HEIGHT + 80, height - FLOOR_HEIGHT - 80);
 
     const bubble = this.add.container(width + 50, y).setDepth(12);
-    bubble.baseY = y;
-    bubble.bobPhase = 0;
+    bubble.kind       = 'magnet';
+    bubble.baseY      = y;
+    bubble.bobPhase   = 0;
+    bubble.grabRadius = MAGNET_SIZE * 0.55;
 
     // soft glow — flat-alpha rings, no blur, so it keeps the pixel style
     const glow = this.add.graphics();
@@ -484,25 +652,39 @@ export class GameScene extends Phaser.Scene {
     this.powerups.push(bubble);
   }
 
+  // Destroys a power-up bubble, killing every tween on it and its (possibly
+  // nested) children first so no loop outlives the container.
   _destroyBubble(bubble) {
-    this.tweens.killTweensOf(bubble);
-    bubble.list.forEach((child) => this.tweens.killTweensOf(child));
+    const killDeep = (obj) => {
+      this.tweens.killTweensOf(obj);
+      if (obj.list) obj.list.forEach(killDeep);
+    };
+    killDeep(bubble);
     bubble.destroy();
   }
 
   // moves bubbles left, bobs them, and handles pickup / off-screen exit
   _updatePowerups(deltaMs) {
-    const speed = this._ramp(DIFFICULTY.pipeSpeed);
+    const speed = this._currentSpeed();
+    const body  = this.pbot.body;
+
     for (let i = this.powerups.length - 1; i >= 0; i -= 1) {
       const bubble = this.powerups[i];
       bubble.x -= speed * (deltaMs / 1000);
       bubble.bobPhase += deltaMs / 1000;
       bubble.y = bubble.baseY + Math.sin(bubble.bobPhase * 2.4) * 8;
 
-      if (Phaser.Math.Distance.Between(bubble.x, bubble.y,
-        this.pbot.x, this.pbot.y) < 48) {
+      // pickup test: the bubble (a circle of grabRadius) vs pbot's actual
+      // body rect, so any visible touch collects it — a plain centre-distance
+      // check missed grabs where the player's edge clearly overlapped it.
+      const grab = bubble.grabRadius;
+      const hit = body
+        && bubble.x > body.left   - grab && bubble.x < body.right  + grab
+        && bubble.y > body.top    - grab && bubble.y < body.bottom + grab;
+      if (hit) {
         this.powerups.splice(i, 1);
-        this._collectMagnet(bubble);
+        if (bubble.kind === 'rush') this._collectRush(bubble);
+        else                        this._collectMagnet(bubble);
       } else if (bubble.x < -80) {
         this.powerups.splice(i, 1);
         this._destroyBubble(bubble);
@@ -555,7 +737,7 @@ export class GameScene extends Phaser.Scene {
     this.magnetActive = false;
     this.magnetEndEvent = null;
     // release rubies still in flight so they resume scrolling off-screen
-    const speed = this._ramp(DIFFICULTY.pipeSpeed);
+    const speed = this._currentSpeed();
     this.rubies.children.iterate((r) => {
       if (r && r.magnetized) {
         r.magnetized = false;
@@ -600,6 +782,227 @@ export class GameScene extends Phaser.Scene {
   _hideMagnetAura() {
     if (this.magnetAuraTween) { this.magnetAuraTween.stop(); this.magnetAuraTween = null; }
     if (this.magnetAura) { this.magnetAura.destroy(); this.magnetAura = null; }
+  }
+
+  // --- power rush power-up ------------------------------------------------
+  // Spawns the "pwr" bubble: a glossy orb wrapped in a pulsing red ruby glow
+  // and a slowly-spinning ring of rainbow sparkles.
+  _spawnRush() {
+    const { width, height } = this.scale;
+    const y = Phaser.Math.Between(HUD_HEIGHT + 95, height - FLOOR_HEIGHT - 95);
+
+    const bubble = this.add.container(width + 60, y).setDepth(13);
+    bubble.kind       = 'rush';
+    bubble.baseY      = y;
+    bubble.bobPhase   = 0;
+    bubble.grabRadius = RUSH_BUBBLE_SIZE * 0.55;
+
+    // red ruby-style glow — concentric rings that pulse
+    const glow = this.add.graphics();
+    glow.fillStyle(PALETTE.ruby, 0.16); glow.fillCircle(0, 0, RUSH_BUBBLE_SIZE * 0.98);
+    glow.fillStyle(PALETTE.ruby, 0.26); glow.fillCircle(0, 0, RUSH_BUBBLE_SIZE * 0.74);
+    glow.fillStyle(0xff5566,     0.34); glow.fillCircle(0, 0, RUSH_BUBBLE_SIZE * 0.56);
+    bubble.add(glow);
+    this.tweens.add({
+      targets: glow,
+      scale: { from: 0.82, to: 1.18 },
+      alpha: { from: 1, to: 0.5 },
+      duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+
+    // the power-up orb
+    bubble.add(this.add.image(0, 0, 'pwr').setDisplaySize(RUSH_BUBBLE_SIZE, RUSH_BUBBLE_SIZE));
+
+    // a slowly-spinning ring of rainbow sparkles
+    const ring  = this.add.container(0, 0);
+    const ringR = RUSH_BUBBLE_SIZE * 0.66;
+    RAINBOW.forEach((color, i) => {
+      const ang = (Math.PI * 2 / RAINBOW.length) * i;
+      const spark = this.add.image(Math.cos(ang) * ringR, Math.sin(ang) * ringR, 'sparkle')
+        .setTint(color).setScale(0).setAlpha(0);
+      ring.add(spark);
+      this.tweens.add({
+        targets: spark,
+        alpha: { from: 0, to: 1 },
+        scale: { from: 0, to: 0.62 },
+        duration: 520, delay: i * 120, hold: 80,
+        yoyo: true, repeat: -1, repeatDelay: 340, ease: 'Sine.easeInOut',
+      });
+    });
+    this.tweens.add({ targets: ring, angle: 360, duration: 4600, repeat: -1, ease: 'Linear' });
+    bubble.add(ring);
+
+    this.powerups.push(bubble);
+  }
+
+  _collectRush(bubble) {
+    this.sound.play('pwr-up', { volume: 0.75 });
+
+    const ring = this.add.circle(bubble.x, bubble.y, RUSH_BUBBLE_SIZE * 0.5, 0xffffff, 0)
+      .setStrokeStyle(5, PALETTE.yellow, 0.95).setDepth(46);
+    this.tweens.add({
+      targets: ring, scale: 3.1, alpha: 0,
+      duration: 460, ease: 'Cubic.easeOut', onComplete: () => ring.destroy(),
+    });
+    const label = this.add.text(bubble.x, bubble.y, 'POWER RUSH!', {
+      fontFamily: FONTS.ui, fontSize: '24px', fontStyle: 'bold',
+      color: PALETTE_CSS.yellow, stroke: PALETTE_CSS.darkRed, strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(47);
+    this.tweens.add({
+      targets: label, y: label.y - 58, alpha: 0,
+      duration: 900, ease: 'Cubic.easeOut', onComplete: () => label.destroy(),
+    });
+
+    this._destroyBubble(bubble);
+    this._activateRush();
+  }
+
+  _activateRush() {
+    // re-collecting just refreshes the timer (a bubble can't spawn mid-rush,
+    // but guard anyway)
+    if (this.rushActive) {
+      if (this.rushEndEvent) this.rushEndEvent.remove();
+      this.rushEndEvent = this.time.delayedCall(RUSH.durationMs, () => this._endRush());
+      return;
+    }
+    this.rushActive = true;
+
+    // suspend the normal obstacle + lane flow for the duration
+    if (this.pipeTimer) { this.pipeTimer.remove(); this.pipeTimer = null; }
+    if (this.laneTimer) { this.laneTimer.remove(); this.laneTimer = null; }
+
+    this._retractPillars();
+
+    // music: duck the round track, bring in the rush track
+    this.gameBgm.pause();
+    this.rushBgm.play();
+
+    this._startRushVisuals();
+    this.cameras.main.flash(240, 255, 210, 90);
+
+    // six 5x5 ruby grids spread across the duration (one now, then a timer)
+    this._spawnRubyGrid();
+    this.gridTimer = this.time.addEvent({
+      delay: RUSH.durationMs / RUSH.gridGroups,
+      repeat: RUSH.gridGroups - 2,
+      callback: () => this._spawnRubyGrid(),
+    });
+
+    this.rushEndEvent = this.time.delayedCall(RUSH.durationMs, () => this._endRush());
+  }
+
+  _endRush() {
+    if (!this.rushActive) return;
+    this.rushActive   = false;
+    this.rushEndEvent = null;
+    if (this.gridTimer) { this.gridTimer.remove(); this.gridTimer = null; }
+
+    this._stopRushVisuals();
+
+    // music back to normal
+    this.rushBgm.stop();
+    if (!this.gameOver) this.gameBgm.resume();
+
+    // a clear-sky buffer, then the pillars drop back into frame
+    this.rushRecoverEvent = this.time.delayedCall(RUSH.recoverDelayMs, () => {
+      this.rushRecoverEvent = null;
+      if (this.gameOver) return;
+      this._spawnPipePair({ safe: true, dropIn: true });
+      this._scheduleNextPipe();
+    });
+  }
+
+  // Pulls every on-screen pillar out of frame — tops upward, bottoms down.
+  _retractPillars() {
+    const h = this.scale.height;
+    this.pipes.children.iterate((p) => {
+      if (!p) return;
+      if (p.body) p.body.enable = false;          // no collisions while leaving
+      this.tweens.killTweensOf(p);
+      this.tweens.add({
+        targets: p,
+        y: p.originY === 1 ? -80 : h + 80,
+        duration: 560,
+        ease: 'Cubic.easeIn',
+        onComplete: () => p.destroy(),
+      });
+    });
+  }
+
+  // A 5x5 block of rubies — the headline reward of a power rush.
+  _spawnRubyGrid() {
+    if (this.gameOver) return;
+    const speed = this._currentSpeed();
+    const dim   = RUSH.gridDim;
+    const sp    = RUSH.gridSpacing;
+    const half  = (dim - 1) / 2;
+    const cx    = this.scale.width + 40 + half * sp; // leftmost column off-screen
+    const cy    = this._laneY(half * sp + RUBY_SIZE / 2);
+    for (let row = 0; row < dim; row += 1) {
+      for (let col = 0; col < dim; col += 1) {
+        this._spawnRubyAt(cx + (col - half) * sp, cy + (row - half) * sp, speed, false);
+      }
+    }
+  }
+
+  // faint red afterimage of pbot, spawned on a throttle while rushing
+  _spawnRushTrail() {
+    const ghost = this.add.image(this.pbot.x, this.pbot.y, 'pbot')
+      .setScale(this.pbot.scaleX, this.pbot.scaleY)
+      .setAngle(this.pbot.angle)
+      .setAlpha(0.32)
+      .setTint(0xff5a5a)
+      .setDepth(4);
+    this.tweens.add({
+      targets: ghost, alpha: 0,
+      duration: 300, onComplete: () => ghost.destroy(),
+    });
+  }
+
+  _startRushVisuals() {
+    const { width, height } = this.scale;
+    // pulsing red edge-glow over the playfield
+    this.rushOverlay = this.add.image(width / 2, height / 2, 'rush-vignette')
+      .setDisplaySize(width, height).setDepth(44).setAlpha(0.6);
+    this.rushOverlayTween = this.tweens.add({
+      targets: this.rushOverlay,
+      alpha: { from: 0.6, to: 1 },
+      duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+    // streaking speed lines
+    this.speedLineTimer = this.time.addEvent({
+      delay: 90, loop: true, callback: () => this._spawnSpeedLine(),
+    });
+  }
+
+  _stopRushVisuals() {
+    if (this.speedLineTimer)   { this.speedLineTimer.remove();  this.speedLineTimer = null; }
+    if (this.rushOverlayTween) { this.rushOverlayTween.stop();  this.rushOverlayTween = null; }
+    if (this.rushOverlay) {
+      const overlay = this.rushOverlay;
+      this.rushOverlay = null;
+      this.tweens.add({
+        targets: overlay, alpha: 0,
+        duration: 350, onComplete: () => overlay.destroy(),
+      });
+    }
+  }
+
+  _spawnSpeedLine() {
+    const { width, height } = this.scale;
+    const y   = Phaser.Math.Between(HUD_HEIGHT + 16, height - FLOOR_HEIGHT - 16);
+    const len = Phaser.Math.Between(46, 130);
+    const line = this.add.rectangle(width + len, y, len, Phaser.Math.Between(2, 4),
+      Phaser.Math.RND.pick([0xffffff, 0xfff0a8, 0xffd633]), 0.55)
+      .setOrigin(0, 0.5).setDepth(45);
+    this.tweens.add({
+      targets: line,
+      x: -len,
+      alpha: 0,
+      duration: Phaser.Math.Between(300, 480),
+      ease: 'Sine.easeIn',
+      onComplete: () => line.destroy(),
+    });
   }
 
   _onHitPillar(pillar) {
@@ -651,11 +1054,20 @@ export class GameScene extends Phaser.Scene {
 
   _freezeGameplay() {
     if (this.pipeTimer) this.pipeTimer.remove();
-    if (this.rubyTimer) this.rubyTimer.remove();
+    if (this.laneTimer) this.laneTimer.remove();
     if (this.magnetTimer) this.magnetTimer.remove();
     if (this.magnetEndEvent) this.magnetEndEvent.remove();
     this.magnetActive = false;
     this._hideMagnetAura();
+
+    // tear down any in-progress power rush
+    if (this.rushTimer) this.rushTimer.remove();
+    if (this.gridTimer) this.gridTimer.remove();
+    if (this.rushEndEvent) this.rushEndEvent.remove();
+    if (this.rushRecoverEvent) this.rushRecoverEvent.remove();
+    this.rushActive = false;
+    this._stopRushVisuals();
+    if (this.rushBgm && this.rushBgm.isPlaying) this.rushBgm.stop();
     this.pipes.children.iterate((p) => {
       if (p && p.body) p.body.setVelocity(0, 0);
     });
@@ -711,9 +1123,9 @@ export class GameScene extends Phaser.Scene {
         chunkX, chunkY,
         Phaser.Math.Between(18, 32),
         Phaser.Math.Between(18, 32),
-        PALETTE.royalBlue,
+        Phaser.Math.RND.pick([PALETTE.goldLight, PALETTE.goldDark]),
       ).setDepth(14);
-      chunk.setStrokeStyle(1, PALETTE.navy);
+      chunk.setStrokeStyle(1, PALETTE.goldEdge);
 
       this.physics.add.existing(chunk);
       chunk.body.setVelocity(

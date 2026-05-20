@@ -10,6 +10,11 @@ export const PALETTE = {
   yellow:     0xfdd83d,
   orange:     0xffb800,
   white:      0xffffff,
+
+  // Pillar gold — a gameplay obstacle color, not a brand token.
+  goldLight:  0xffd633,
+  goldDark:   0xd89900,
+  goldEdge:   0x9a6e00,
 };
 
 export const PALETTE_CSS = {
@@ -20,6 +25,10 @@ export const PALETTE_CSS = {
   yellow:     '#fdd83d',
   orange:     '#ffb800',
   white:      '#ffffff',
+
+  goldLight:  '#ffd633',
+  goldDark:   '#d89900',
+  goldEdge:   '#9a6e00',
 };
 
 export const GAME = {
@@ -30,10 +39,9 @@ export const GAME = {
   roundDurationMs: 3 * 60 * 1000,
 
   // gameplay tuning
-  gravity:          1200,
-  flapVelocity:     -380,
-  rubySpawnEveryMs: 2200,
-  rubyValue:        1,
+  gravity:      1200,
+  flapVelocity: -380,
+  rubyValue:    1,
 };
 
 // Difficulty ramp. Over the round, pipes get faster, the gap narrows, and
@@ -54,6 +62,20 @@ export const MAGNET = {
   spawnChance:  0.7,   // 7-in-10 chance a roll actually spawns a bubble
   durationMs:   5000,  // effect lasts up to 5s
   pullSpeed:    560,   // px/sec rubies fly toward the player
+};
+
+// Power Rush power-up: a 7s frenzy — the pillars retract out of frame, the
+// game speeds up, and grids of rubies pour in.
+export const RUSH = {
+  spawnEveryMs:    21000,  // interval between rush spawn rolls
+  spawnChance:     0.6,    // chance a roll arms a rush bubble
+  durationMs:      7000,   // how long the effect lasts
+  speedMultiplier: 1.6,    // +60% world speed (obstacles/rubies) while active
+  bgScrollMultiplier: 10,  // background races by 10x its normal speed
+  gridGroups:      6,      // number of ruby grids spawned over the duration
+  gridDim:         5,      // rubies per row / column (a 5x5 block)
+  gridSpacing:     52,     // px between rubies in a grid
+  recoverDelayMs:  1200,   // clear-sky buffer before pillars drop back in
 };
 
 export const FONTS = {
