@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Flying Ruby</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +15,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      overscroll-behavior: none;
       font-family: "Segoe UI", Tahoma, sans-serif;
       color: #fdd83d;
       touch-action: manipulation;
@@ -24,25 +25,38 @@
 
     #game-root {
       width: 100vw;
+      /* 100dvh tracks the *visible* viewport, so the canvas fits the phone
+         screen instead of running behind the browser's URL bar. The 100vh
+         line is a fallback for browsers without dvh support. */
       height: 100vh;
+      height: 100dvh;
       display: flex;
       justify-content: center;
       align-items: center;
     }
 
+    /* Sizing box only — Phaser's autoCenter (CENTER_BOTH) centres the
+       canvas inside it. No flex here, or the two would compound and
+       push the canvas off-centre. */
     #game-canvas-wrap {
       width: 100%;
       height: 100%;
-      max-width: 480px;
-      max-height: 854px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
     }
 
     canvas {
       display: block;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    /* Phones fill the whole screen (rules above). Larger screens show the
+       game as a centred 480x854 "card" with a drop shadow. */
+    @media (min-width: 600px) {
+      #game-canvas-wrap {
+        max-width: 480px;
+        max-height: 854px;
+      }
+      canvas {
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      }
     }
   </style>
 </head>
