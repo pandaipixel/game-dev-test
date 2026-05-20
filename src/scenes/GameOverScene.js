@@ -1,4 +1,4 @@
-import { PALETTE, PALETTE_CSS, FONTS } from '../config.js';
+import { GAME, PALETTE, PALETTE_CSS, FONTS } from '../config.js';
 import { addMuteButton } from '../muteButton.js';
 
 const BEST_KEY = 'flying-ruby:best';
@@ -12,6 +12,11 @@ export class GameOverScene extends Phaser.Scene {
     this.score      = data?.score ?? 0;
     this.timeUsedMs = data?.timeUsedMs ?? 0;
     this.cause      = data?.cause ?? 'crash'; // 'crash' | 'time'
+
+    // A continue is offered only after a crash with time still left in the
+    // shared 3-minute budget. Once the full 3:00 is spent, the only way on
+    // is back to the home screen.
+    this.canContinue = this.cause === 'crash' && this.timeUsedMs < GAME.roundDurationMs;
 
     // load + update best score — guarded, since sandboxed webviews and
     // private mode can make localStorage throw
@@ -76,14 +81,20 @@ export class GameOverScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
-    const subtitle = isTimeUp
-      ? 'You flew the full 3:00 round!'
-      : 'pbot took a tumble.';
+    const subtitle = this.canContinue
+      ? `${this._mmss(GAME.roundDurationMs - this.timeUsedMs)} left of your 3:00`
+      : 'Your full 3:00 is up — nice flying!';
     this.add.text(cx, height * 0.18 + 50, subtitle, {
       fontFamily: FONTS.ui,
       fontSize:   '14px',
       color:      PALETTE_CSS.white,
     }).setOrigin(0.5).setAlpha(0.85);
+  }
+
+  // formats milliseconds as M:SS
+  _mmss(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`;
   }
 
   _drawScorePanel(width, height) {
@@ -174,14 +185,25 @@ export class GameOverScene extends Phaser.Scene {
     const cx = width / 2;
     const by = height * 0.78;
 
-    this._makeButton(cx, by, 220, 64, 'PLAY AGAIN',
-      PALETTE.yellow, PALETTE_CSS.darkRed, PALETTE.darkRed,
-      () => this.scene.start('GameScene'));
+    if (this.canContinue) {
+      // resume the run — carries the score and the time already flown
+      this._makeButton(cx, by, 220, 64, 'CONTINUE',
+        PALETTE.yellow, PALETTE_CSS.darkRed, PALETTE.darkRed,
+        () => this.scene.start('GameScene', {
+          score:      this.score,
+          timeUsedMs: this.timeUsedMs,
+        }));
 
-    this._makeButton(cx, by + 96, 200, 52, 'HOME',
-      PALETTE.navy, PALETTE_CSS.yellow, PALETTE.yellow,
-      () => this.scene.start('StartScene'),
-      /* outlined */ true);
+      this._makeButton(cx, by + 96, 200, 52, 'HOME',
+        PALETTE.navy, PALETTE_CSS.yellow, PALETTE.yellow,
+        () => this.scene.start('StartScene'),
+        /* outlined */ true);
+    } else {
+      // the full 3-minute budget is spent — the only way on is home
+      this._makeButton(cx, by + 32, 220, 64, 'HOME',
+        PALETTE.yellow, PALETTE_CSS.darkRed, PALETTE.darkRed,
+        () => this.scene.start('StartScene'));
+    }
   }
 
   _makeButton(x, y, w, h, label, fillColor, textColor, borderColor, onClick, outlined = false) {

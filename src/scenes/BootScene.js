@@ -42,7 +42,7 @@ export class BootScene extends Phaser.Scene {
     const params = new URLSearchParams(window.location.search);
     const target = params.get('scene') || 'StartScene';
     const payload = target === 'GameOverScene'
-      ? { score: 12, timeUsedMs: 95000, cause: 'time' }
+      ? { score: 12, timeUsedMs: 95000, cause: 'crash' }
       : undefined;
     this.scene.start(target, payload);
   }

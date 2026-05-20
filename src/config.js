@@ -50,7 +50,7 @@ export const GAME = {
 // fraction of the round) so the final stretch plays at a steady maximum.
 export const DIFFICULTY = {
   rampCompleteAt:   0.85,
-  pipeSpeed:        { start: 180,  end: 315  }, // px/sec
+  pipeSpeed:        { start: 234,  end: 410  }, // px/sec (30% above the original pace)
   pipeGap:          { start: 230,  end: 160  }, // px between top/bottom pipe
   pipeSpawnEveryMs: { start: 1700, end: 1100 }, // delay between pipe pairs
 };
@@ -72,9 +72,7 @@ export const RUSH = {
   durationMs:      7000,   // how long the effect lasts
   speedMultiplier: 1.6,    // +60% world speed (obstacles/rubies) while active
   bgScrollMultiplier: 10,  // background races by 10x its normal speed
-  gridGroups:      6,      // number of ruby grids spawned over the duration
-  gridDim:         5,      // rubies per row / column (a 5x5 block)
-  gridSpacing:     52,     // px between rubies in a grid
+  rubyCount:       50,     // rubies streamed along a sine wave over the effect
   recoverDelayMs:  1200,   // clear-sky buffer before pillars drop back in
 };
 

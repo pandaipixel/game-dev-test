@@ -22,6 +22,7 @@ const CIRCLE_RADIUS      = 74;    // radius of a ruby ring
 
 // Power Rush power-up.
 const RUSH_BUBBLE_SIZE   = 68;    // pwr orb display size, px
+const RUSH_SINE_WAVE     = 11;    // rubies per full cycle of the rush sine line
 const RAINBOW            = [      // sparkle hues ringing the rush bubble
   0xff3b3b, 0xff9e2c, 0xffe23d, 0x4cd964, 0x34c5e8, 0x4b7bec, 0xc44cff,
 ];
@@ -35,11 +36,19 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  // A "continue" restarts this scene carrying the running score and the time
+  // already flown. The 3-minute round duration is a budget shared across every
+  // continue — each run begins with whatever time is left.
+  init(data) {
+    this.carriedScore  = data?.score      ?? 0;
+    this.carriedTimeMs = data?.timeUsedMs ?? 0;
+  }
+
   create() {
-    this.score          = 0;
+    this.score          = this.carriedScore;
     this.started        = false;
     this.gameOver       = false;
-    this.timeRemainingMs = GAME.roundDurationMs;
+    this.timeRemainingMs = GAME.roundDurationMs - this.carriedTimeMs;
     this.elapsedMs      = 0;
     this.magnetActive   = false;
     this.magnetDue      = false; // a magnet roll succeeded; next lane spawns it
@@ -53,6 +62,7 @@ export class GameScene extends Phaser.Scene {
     this._createPbot();
     this._createGroups();
     this._createHud();
+    this._updateHud();   // show carried score + remaining budget before the tap
     this._createPrompt();
 
     // game music — loops for the whole round, stops when the scene ends
@@ -451,15 +461,15 @@ export class GameScene extends Phaser.Scene {
 
   // Reward that rides in the gap of a freshly spawned pillar pair: nothing,
   // a single ruby, or a compact vertical trio sized to fit the gap.
-  // Odds are tuned for ~0.58 rubies per gap (half the earlier density).
+  // Odds tuned for ~0.35 rubies per gap (40% below the earlier density).
   _spawnGapReward(gapTop, gap, speed) {
     const roll = Math.random();
-    if (roll < 0.66) return;                         // empty gap — a breather
+    if (roll < 0.79) return;                         // empty gap — a breather
 
     const cx = this.scale.width + 40;
     const cy = gapTop + gap / 2;
 
-    if (roll < 0.88) {                               // single ruby
+    if (roll < 0.93) {                               // single ruby
       this._spawnRubyAt(cx, cy, speed);
       return;
     }
@@ -487,13 +497,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Odds tuned for ~1.5 rubies per lane (half the earlier density) — over
-    // half the lanes are now empty, with formations kept but made rarer.
+    // Odds tuned for ~0.9 rubies per lane (40% below the earlier density) —
+    // most lanes are now empty, with formations kept but made rarer.
     const roll = Math.random();
-    if (roll < 0.55) return;                         // empty lane — a breather
-    if (roll < 0.75) this._spawnRubyAt(this.scale.width + 30, this._laneY(RUBY_SIZE / 2), speed);
-    else if (roll < 0.85) this._spawnFormation('line5',  speed);
-    else if (roll < 0.93) this._spawnFormation('wave',   speed);
+    if (roll < 0.73) return;                         // empty lane — a breather
+    if (roll < 0.85) this._spawnRubyAt(this.scale.width + 30, this._laneY(RUBY_SIZE / 2), speed);
+    else if (roll < 0.91) this._spawnFormation('line5',  speed);
+    else if (roll < 0.96) this._spawnFormation('wave',   speed);
     else                  this._spawnFormation('circle', speed);
   }
 
@@ -880,12 +890,13 @@ export class GameScene extends Phaser.Scene {
     this._startRushVisuals();
     this.cameras.main.flash(240, 255, 210, 90);
 
-    // six 5x5 ruby grids spread across the duration (one now, then a timer)
-    this._spawnRubyGrid();
-    this.gridTimer = this.time.addEvent({
-      delay: RUSH.durationMs / RUSH.gridGroups,
-      repeat: RUSH.gridGroups - 2,
-      callback: () => this._spawnRubyGrid(),
+    // a sine line of rubies streamed evenly across the whole duration
+    this.rushSinePhase = 0;
+    this._spawnRushRuby();
+    this.rushRubyTimer = this.time.addEvent({
+      delay: RUSH.durationMs / RUSH.rubyCount,
+      repeat: RUSH.rubyCount - 2,
+      callback: () => this._spawnRushRuby(),
     });
 
     this.rushEndEvent = this.time.delayedCall(RUSH.durationMs, () => this._endRush());
@@ -895,7 +906,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.rushActive) return;
     this.rushActive   = false;
     this.rushEndEvent = null;
-    if (this.gridTimer) { this.gridTimer.remove(); this.gridTimer = null; }
+    if (this.rushRubyTimer) { this.rushRubyTimer.remove(); this.rushRubyTimer = null; }
 
     this._stopRushVisuals();
 
@@ -929,20 +940,17 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // A 5x5 block of rubies — the headline reward of a power rush.
-  _spawnRubyGrid() {
+  // One ruby on the power-rush sine line. Called on a fast timer — as each
+  // ruby scrolls left the stream traces a flowing sine wave across the screen.
+  _spawnRushRuby() {
     if (this.gameOver) return;
-    const speed = this._currentSpeed();
-    const dim   = RUSH.gridDim;
-    const sp    = RUSH.gridSpacing;
-    const half  = (dim - 1) / 2;
-    const cx    = this.scale.width + 40 + half * sp; // leftmost column off-screen
-    const cy    = this._laneY(half * sp + RUBY_SIZE / 2);
-    for (let row = 0; row < dim; row += 1) {
-      for (let col = 0; col < dim; col += 1) {
-        this._spawnRubyAt(cx + (col - half) * sp, cy + (row - half) * sp, speed, false);
-      }
-    }
+    const top = HUD_HEIGHT + 60;
+    const bot = this.scale.height - FLOOR_HEIGHT - 60;
+    const cy  = (top + bot) / 2;
+    const amp = (bot - top) / 2 - RUBY_SIZE;
+    const y   = cy + amp * Math.sin(this.rushSinePhase);
+    this.rushSinePhase += (Math.PI * 2) / RUSH_SINE_WAVE;
+    this._spawnRubyAt(this.scale.width + 30, y, this._currentSpeed(), false);
   }
 
   // faint red afterimage of pbot, spawned on a throttle while rushing
@@ -1046,7 +1054,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(1900, () => {
       this.scene.start('GameOverScene', {
         score:      this.score,
-        timeUsedMs: this.elapsedMs,
+        timeUsedMs: this.carriedTimeMs + this.elapsedMs,
         cause:      'crash',
       });
     });
@@ -1062,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
 
     // tear down any in-progress power rush
     if (this.rushTimer) this.rushTimer.remove();
-    if (this.gridTimer) this.gridTimer.remove();
+    if (this.rushRubyTimer) this.rushRubyTimer.remove();
     if (this.rushEndEvent) this.rushEndEvent.remove();
     if (this.rushRecoverEvent) this.rushRecoverEvent.remove();
     this.rushActive = false;
@@ -1290,7 +1298,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(800, () => {
       this.scene.start('GameOverScene', {
         score:      this.score,
-        timeUsedMs: this.elapsedMs,
+        timeUsedMs: this.carriedTimeMs + this.elapsedMs,
         cause,
       });
     });
