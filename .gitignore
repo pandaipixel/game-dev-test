@@ -8,3 +8,6 @@ dist/
 .idea/
 *.tsbuildinfo
 .claude/settings.local.json
+
+# Pages build staging
+_site/

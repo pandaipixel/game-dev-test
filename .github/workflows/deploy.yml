@@ -1,4 +1,9 @@
-name: Deploy to GitHub Pages
+name: Deploy Flying Ruby to GitHub Pages
+
+# Flying Ruby is a static site (vanilla JS + Phaser from CDN, no build
+# step), so this just publishes the game files as-is. The previous
+# Vite-built "Ruby Blaster" project is preserved under zuma-clone/ and is
+# not deployed.
 
 on:
   push:
@@ -15,35 +20,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage the Flying Ruby site
+        run: |
+          mkdir -p _site
+          cp -r index.html README.md src assets bgm sfx _site/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
